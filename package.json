@@ -1,15 +1,14 @@
 { "name": "txn"
 , "version": "0.2.16"
 , "author": { "name": "Jason Smith"
-            , "email": "jhs@iriscouch.com"
-            , "url" : "http://www.iriscouch.com/"
+            , "email": "jason.h.smith@gmail.com"
             }
 , "description": "Process and update CouchDB data in atomic, all-or-nothing transactions"
 , "tags"       : ["couchdb", "transaction", "transactions"]
 
-, "homepage": "http://github.com/nodejitsu/txn"
+, "homepage": "http://github.com/jhs/txn"
 , "repository": { "type": "git"
-                , "url": "git://github.com/nodejitsu/txn" }
+                , "url": "git://github.com/jhs/txn" }
 
 , "engines": [ "node" ]
 , "scripts": { "test": "node test/run.js"
