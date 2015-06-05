@@ -22,7 +22,7 @@ if(process.env.charles)
   COUCH = 'http://localhost:15984';
 
 var TXN = require('../api');
-var TXN_lib = require('../lib/lib')
+var TXN_lib = require('../lib.js')
 
 /*
 if(require.isBrowser) {
