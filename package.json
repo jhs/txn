@@ -1,29 +1,40 @@
-{ "name": "txn"
-, "version": "1.0.0"
-, "author": { "name": "Jason Smith"
-            , "email": "jason.h.smith@gmail.com"
-            }
-, "description": "Process and update CouchDB data in atomic, all-or-nothing transactions"
-, "tags"       : ["couchdb", "transaction", "transactions"]
-
-, "homepage": "http://github.com/jhs/txn"
-, "repository": { "type": "git"
-                , "url": "git://github.com/jhs/txn" }
-
-, "engines": [ "node" ]
-, "scripts": { "test": "node test/run.js"
-             }
-
-, "dependencies" : { "defaultable"    : "~0.7.2"
-                   , "request"        : "^2.48.0"
-                   , "browser-request": "~0.2.1"
-                   , "debug"          : "^2.1.0"
-                   , "obj_diff"       : "~0.2.0"
-                   }
-, "devDependencies": { "pouchdb": "^3.6.0"
-                     }
-, "browser": { "request" : "browser-request"
-             }
-, "main": "api.js"
-, "license": "Apache 2.0"
+{
+  "name": "txn",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jason Smith",
+    "email": "jason.h.smith@gmail.com"
+  },
+  "description": "Process and update CouchDB data in atomic, all-or-nothing transactions",
+  "tags": [
+    "couchdb",
+    "transaction",
+    "transactions"
+  ],
+  "homepage": "http://github.com/jhs/txn",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/jhs/txn"
+  },
+  "engines": [
+    "node"
+  ],
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "dependencies": {
+    "defaultable": "~0.7.2",
+    "request": "^2.48.0",
+    "browser-request": "~0.2.1",
+    "debug": "^2.1.0",
+    "obj_diff": "~0.2.0"
+  },
+  "devDependencies": {
+    "pouchdb": "^3.6.0"
+  },
+  "browser": {
+    "request": "browser-request"
+  },
+  "main": "api.js",
+  "license": "Apache 2.0"
 }
