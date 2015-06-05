@@ -17,8 +17,6 @@ var TESTS = require('./txn');
 while(! TESTS[TESTS.length - 1])
   TESTS.length = TESTS.length - 1;
 
-var LOG = debug;
-
 //
 // Runner
 //
@@ -84,7 +82,7 @@ function run() {
     }
 
     if(duration > (timeout * 0.80))
-      LOG.warn('Long processing time: ' + test.name + ' took ' + duration + 'ms');
+      debug('Long processing time: ' + test.name + ' took ' + duration + 'ms');
 
     return count.inc('pass');
   }
@@ -99,7 +97,7 @@ function run() {
     process.exceptions.on('exception', function(er) { return done(er); })
   }
 
-  LOG.debug('Test: ' + test.name);
+  debug('Test: ' + test.name);
   try       { test(done) }
   catch(er) { done(er)   }
 }
@@ -112,15 +110,15 @@ function complete() {
     if(er.expected || er.actual)
       stack = "expected=" + util.inspect(er.expected) + ' actual=' + util.inspect(er.actual) + '\n' + stack;
 
-    LOG.error("Test: " + test.name);
-    LOG.error(stack);
-    LOG.error("");
+    debug("Error: Test: " + test.name);
+    debug(stack);
+    debug("");
   })
 
-  LOG.info('Pass   : ' + count.pass);
-  LOG.info('Fail   : ' + count.fail);
-  LOG.info('Timeout: ' + count.timeout);
-  LOG.info('Skip   : ' + count.skip);
+  debug('Pass   : ' + count.pass);
+  debug('Fail   : ' + count.fail);
+  debug('Timeout: ' + count.timeout);
+  debug('Skip   : ' + count.skip);
 }
 
 exports.run = function() {
