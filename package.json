@@ -31,7 +31,8 @@
   },
   "devDependencies": {
     "memdown": "^1.0.0",
-    "pouchdb": "^3.6.0"
+    "pouchdb": "^3.6.0",
+    "tap": "^1.2.0"
   },
   "browser": {
     "request": "browser-request"
