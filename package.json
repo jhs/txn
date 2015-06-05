@@ -20,7 +20,8 @@
                    , "debug"          : "^2.1.0"
                    , "obj_diff"       : "~0.2.0"
                    }
-, "devDependencies": { }
+, "devDependencies": { "pouchdb": "^3.6.0"
+                     }
 , "browser": { "request" : "browser-request"
              }
 , "main": "api.js"
