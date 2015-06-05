@@ -2,7 +2,7 @@
 //
 // Run the tests
 
-var log4js = require('log4js')
+var debug = require('debug')('txn:test')
   , util = require('util'), I = util.inspect
   , assert = require('assert')
   ;
@@ -17,8 +17,7 @@ var TESTS = require('./txn');
 while(! TESTS[TESTS.length - 1])
   TESTS.length = TESTS.length - 1;
 
-var LOG = log4js.getLogger('tests');
-LOG.setLevel(process.env.log_level || 'info');
+var LOG = debug;
 
 //
 // Runner

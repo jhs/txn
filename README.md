@@ -94,8 +94,7 @@ The **request_obj** is for Mikeal Rogers's [request][req] module. (Txn uses *req
 * **after** | Milliseconds to postpone the *first* operation. (A random value is a good way to load-balance job consumers). Default: `null` i.e. run immediately
 * **delay** | Milliseconds to wait before *retrying* after a conflict. Each retry doubles the wait time. Default: `100`
 * **timeout** | Milliseconds to wait for the **operation** to finish. Default: `15000` (15 seconds)
-* **log** | Logger object to use. Default is a log4js logger named `txn`.
-* **log_level** | Log level cutoff. Default: `info`
+* **log** | Logger object to use. Default is a debug function in the namespace "txn"
 
 For example:
 
