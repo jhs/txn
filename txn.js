@@ -20,6 +20,11 @@ var util = require('util')
   , assert = require('assert')
   , obj_diff = require('obj_diff')
 
+var PouchDB = null
+try { PouchDB = require('pouchdb') }
+catch (er) {}
+
+var EventEmitter = events.EventEmitter2 || events.EventEmitter
 var TICK = typeof global.setImmediate !== 'function' ? process.nextTick : setImmediate
 
 require('defaultable').def(module,
@@ -48,7 +53,7 @@ var lib = require('./lib');
 module.exports = couch_doc_txn
 module.exports.Txn = Transaction
 module.exports.Transaction = Transaction
-module.exports.PouchDB = {Transaction:Transaction, txn:pouch_doc_txn}
+module.exports.PouchDB = {Transaction:Transaction, txn:couch_doc_txn}
 
 
 function couch_doc_txn(fetch_req, operation, callback) {
@@ -71,7 +76,13 @@ function couch_doc_txn(fetch_req, operation, callback) {
   opts.req       = fetch_req;
   opts.operation = operation;
 
-  var txn = new Transaction(opts);
+  var TxnClass = Transaction
+  if (PouchDB && this instanceof PouchDB) {
+    TxnClass = PouchTransaction
+    opts.db = this
+  }
+
+  var txn = new TxnClass(opts);
 
   txn.on('timeout', function() {
     var err = new Error('Transaction ('+txn.name+') timeout');
@@ -101,17 +112,13 @@ function couch_doc_txn(fetch_req, operation, callback) {
   return txn;
 }
 
-function pouch_doc_txn(fetch_req, operation, callback) {
-  throw new Error('Not implemented')
-}
 
-
-var EventEmitter = events.EventEmitter2 || events.EventEmitter;
 util.inherits(Transaction, EventEmitter);
-
 function Transaction (opts) {
   var self = this;
   EventEmitter.call(self);
+
+  self.type = 'couchdb'
 
   self.req                 = opts.req                 || DEFAULT.req;
   self.couch               = opts.couch               || DEFAULT.couch;
@@ -145,6 +152,23 @@ Transaction.prototype.start = function() {
   if(self.id)
     self.id = lib.enc_id(self.id)
 
+  self.prep_params()
+
+  assert.ok(self.max_tries > 0, 'max_tries must be 1 or greater');
+  assert.ok(self.timeout > 0, 'timeout must be 1 or greater');
+  assert.equal(typeof self.operation, 'function', 'Data operation required');
+
+  self.name = self.operation.name || 'Untitled';
+  self.fetches = 0;
+  self.stores = 0
+  self.tries = 0;
+  return self.attempt();
+}
+
+// Prepare for an HTTP transaction.
+Transaction.prototype.prep_params = function() {
+  var self = this
+
   var has_uri   = !! (self.req.uri || self.req.url);
   var has_couch = !! (self.couch || self.db || self.id);
 
@@ -158,16 +182,6 @@ Transaction.prototype.start = function() {
 
   self.uri = self.req.uri || self.req.url || [self.couch, self.db, self.id].join('/');
   assert.ok(self.uri, 'Must set .uri or else .couch, .db, and .id');
-
-  assert.ok(self.max_tries > 0, 'max_tries must be 1 or greater');
-  assert.ok(self.timeout > 0, 'timeout must be 1 or greater');
-  assert.equal(typeof self.operation, 'function', 'Data operation required');
-
-  self.name = self.operation.name || 'Untitled';
-  self.fetches = 0;
-  self.stores = 0
-  self.tries = 0;
-  return self.attempt();
 }
 
 Transaction.prototype.attempt = function() {
@@ -344,5 +358,28 @@ Transaction.prototype.uri_to_id = function(uri) {
   var parts = uri.split('/');
   return parts[ parts.length - 1 ];
 }
+
+
+//
+// PouchTransaction is a thin subclass of Transaction
+//
+
+util.inherits(PouchTransaction, Transaction)
+function PouchTransaction (opts) {
+  var self = this
+  Transaction.call(self, opts)
+
+  self.type = 'pouch'
+  self.log = opts.log || debug('txn:pouchdb')
+}
+
+PouchTransaction.prototype.prep_params = function() {
+  var self = this
+
+  self.log('Prep PouchDB')
+  assert.ok(self.id, 'Must provide .id parameter')
+  assert.ok(PouchDB && self.db instanceof PouchDB, 'Must provide PouchDB .db parameter')
+}
+
 
 }, require) // defaultable

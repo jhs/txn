@@ -40,11 +40,12 @@ var COUCH = process.env.couchdb
 var POUCH = !COUCH
 
 tap.test('Setup', function(t) {
-  var doc_a = {_id:'doc_a', val:23}
+  var doc = {_id:'doc_a', val:23}
+
   if (COUCH)
-    setup_couchdb(doc_a, done)
+    setup_couchdb()
   else
-    setup_pouchdb(doc_a, done)
+    setup_pouchdb()
 
   function done() {
     if (!state.db)
@@ -57,57 +58,95 @@ tap.test('Setup', function(t) {
 
     t.end()
   }
-})
 
-function setup_pouchdb(doc, done) {
-  PouchDB.plugin(Txn.PouchDB)
-  var db = new PouchDB(DB, {db:memdown})
-  db.put(doc, function(er, body) {
-    if (er) throw er
-    if (!body || !body.ok)
-      throw new Error('Cannot create doc: ' + JSON.stringify(body))
+  function setup_pouchdb() {
+    PouchDB.plugin(Txn.PouchDB)
+    var db = new PouchDB(DB, {db:memdown})
+    db.put(doc, function(er, body) {
+      if (er) throw er
+      if (!body || !body.ok)
+        throw new Error('Cannot create doc: ' + JSON.stringify(body))
 
-    state.db = db
-    state.doc_a = doc
-    state.doc_a._rev = body.rev
-    done()
-  })
-}
+      state.db = db
+      state.doc_a = doc
+      state.doc_a._rev = body.rev
+      done()
+    })
+  }
 
-function setup_couchdb(doc, done) {
-  var url = COUCH + '/' + DB;
-  request({method:'DELETE', uri:url}, function(er, resp, body) {
-    if(er) throw er;
-    var json = JSON.parse(body);
-
-    var already_gone = (resp.statusCode === 404 && json.error === 'not_found');
-    var deleted      = (resp.statusCode === 200 && json.ok    === true);
-
-    if(! (already_gone || deleted))
-      throw new Error('Unknown DELETE response: ' + resp.statusCode + ' ' + body);
-
-    request({method:'PUT', uri:url}, function(er, resp, body) {
+  function setup_couchdb() {
+    var url = COUCH + '/' + DB;
+    request({method:'DELETE', uri:url}, function(er, resp, body) {
       if(er) throw er;
       var json = JSON.parse(body);
 
-      if(resp.statusCode !== 201 || json.ok !== true)
-        throw new Error('Unknown PUT response: ' + resp.statusCode + ' ' + body);
+      var already_gone = (resp.statusCode === 404 && json.error === 'not_found');
+      var deleted      = (resp.statusCode === 200 && json.ok    === true);
 
-      request({method:'POST', uri:url, json:doc}, function(er, resp, body) {
+      if(! (already_gone || deleted))
+        throw new Error('Unknown DELETE response: ' + resp.statusCode + ' ' + body);
+
+      request({method:'PUT', uri:url}, function(er, resp, body) {
         if(er) throw er;
+        var json = JSON.parse(body);
 
-        if(resp.statusCode !== 201 || body.ok !== true)
-          throw new Error("Cannot store doc: " + resp.statusCode + ' ' + JSON.stringify(body));
+        if(resp.statusCode !== 201 || json.ok !== true)
+          throw new Error('Unknown PUT response: ' + resp.statusCode + ' ' + body);
 
-        doc._rev = body.rev;
-        state.doc_a = doc;
-        state.db = COUCH + '/' + DB
-        done();
+        request({method:'POST', uri:url, json:doc}, function(er, resp, body) {
+          if(er) throw er;
+
+          if(resp.statusCode !== 201 || body.ok !== true)
+            throw new Error("Cannot store doc: " + resp.statusCode + ' ' + JSON.stringify(body));
+
+          doc._rev = body.rev;
+          state.doc_a = doc;
+          state.db = COUCH + '/' + DB
+          done();
+        })
       })
     })
-  })
-}
+  }
+})
 
+tap.test('Required params', function(t) {
+  var ID = state.doc_a._id;
+  var orig = state.doc_a.val;
+
+  var noop_ran = false;
+  var noop = function() { noop_ran = true; };
+
+  var TXN = COUCH ? Txn : state.db.txn.bind(state.db)
+
+  t.throws(function() { TXN({}, noop, noop) }, "Mandatory uri");
+
+  t.throws(function() { TXN({couch:COUCH}, noop, noop) }, "Mandatory uri; missing db,id");
+  t.throws(function() { TXN({db   :DB   }, noop, noop) }, "Mandatory uri; missing couch,id");
+  t.throws(function() { TXN({couch:COUCH, db:DB}, noop, noop) }, "Mandatory uri; missing id");
+
+  if (COUCH) {
+    t.throws(function() { TXN({id   :ID   }, noop, noop) }, "Mandatory uri; missing couch,db");
+    t.throws(function() { TXN({couch:COUCH, id:ID}, noop, noop) }, "Mandatory uri");
+    t.throws(function() { TXN({db:DB      , id:ID}, noop, noop) }, "Mandatory uri");
+    assert.equal(false, noop_ran, "CouchDB: Should never have called noop");
+  } else {
+    t.doesNotThrow(function() { TXN({id:ID}, noop, noop) }, 'PouchDB call, only id')
+    t.equal(noop_ran, true, 'PouchDB call with id runs noop()')
+  }
+
+  t.equal(orig, state.doc_a.val, "Val should not have been updated");
+  t.end()
+})
+//
+// TODO
+//
+// db.txn('doc_id', operation, callback)
+// db.txn({_id:'foo'}) throws because it is probably a bad call
+// db.txn({doc:{_id:'foo'}}) works with the standard shortcut
+//
+// t = require('txn')
+// db = new PouchDB('foo')
+// t({db:db, id:'blah'}) works because it checks (db instanceof PouchDB)
 
 function I(obj) {
   return util.inspect(obj, {colors:true, depth:10})
