@@ -19,8 +19,8 @@ var util = require('util')
   , events = require('events')
   , assert = require('assert')
   , obj_diff = require('obj_diff')
-  , tick = typeof global.setImmediate !== 'function' ? process.nextTick : setImmediate
-  ;
+
+var TICK = typeof global.setImmediate !== 'function' ? process.nextTick : setImmediate
 
 require('defaultable').def(module,
   { 'log'                : debug('txn')
@@ -92,7 +92,7 @@ function couch_doc_txn(fetch_req, operation, callback) {
 
   txn.on('done', function(doc) {
     // A huge string of no-op changes can push the stack too deeply.
-    tick(function() {
+    TICK(function() {
       callback(null, doc, txn);
     })
   })
