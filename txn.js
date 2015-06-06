@@ -45,10 +45,10 @@ require('defaultable').def(module,
 var lib = require('./lib');
 
 // The main API is the shortcut function, but the object API is also available.
-//var api = function() { return couch_doc_txn.apply(this, arguments) };
-var api = couch_doc_txn;
-api.Txn = api.Transaction = Transaction;
-module.exports = api;
+module.exports = couch_doc_txn
+module.exports.Txn = Transaction
+module.exports.Transaction = Transaction
+module.exports.PouchDB = {Transaction:Transaction, txn:pouch_doc_txn}
 
 
 function couch_doc_txn(fetch_req, operation, callback) {
@@ -99,6 +99,10 @@ function couch_doc_txn(fetch_req, operation, callback) {
 
   txn.start();
   return txn;
+}
+
+function pouch_doc_txn(fetch_req, operation, callback) {
+  throw new Error('Not implemented')
 }
 
 
