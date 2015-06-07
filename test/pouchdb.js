@@ -39,6 +39,9 @@ tap.test('PouchDB plugin API', function(t) {
 var COUCH = process.env.couchdb
 var POUCH = !COUCH
 
+// This will be set in setup_*() and used throughout the tests.
+var txn = function() { throw new Error('txn not set yet') }
+
 tap.test('Setup', function(t) {
   var doc = {_id:'doc_a', val:23}
 
@@ -50,6 +53,9 @@ tap.test('Setup', function(t) {
   function done() {
     if (!state.db)
       throw new Error('Failed to create test DB')
+
+    if (typeof txn != 'function')
+      throw new Error('txn() not in the global state for further use in testing')
 
     if (POUCH) {
       t.type(state.db.Transaction, 'function', 'PouchDB plugin loaded Transaction class')
@@ -70,6 +76,7 @@ tap.test('Setup', function(t) {
       state.db = db
       state.doc_a = doc
       state.doc_a._rev = body.rev
+      txn = state.db.txn.bind(state.db)
       done()
     })
   }
@@ -99,6 +106,9 @@ tap.test('Setup', function(t) {
           if(resp.statusCode !== 201 || body.ok !== true)
             throw new Error("Cannot store doc: " + resp.statusCode + ' ' + JSON.stringify(body));
 
+          // CouchDB just uses the main API from require().
+          txn = Txn
+
           doc._rev = body.rev;
           state.doc_a = doc;
           state.db = COUCH + '/' + DB
@@ -116,30 +126,54 @@ tap.test('Required params', function(t) {
   var noop_ran = false;
   var noop = function() { noop_ran = true; };
 
-  var TXN = COUCH ? Txn : state.db.txn.bind(state.db)
+  t.throws(function() { txn({}, noop, noop) }, "Mandatory uri");
 
-  t.throws(function() { TXN({}, noop, noop) }, "Mandatory uri");
-
-  t.throws(function() { TXN({couch:COUCH}, noop, noop) }, "Mandatory uri; missing db,id");
-  t.throws(function() { TXN({db   :DB   }, noop, noop) }, "Mandatory uri; missing couch,id");
-  t.throws(function() { TXN({couch:COUCH, db:DB}, noop, noop) }, "Mandatory uri; missing id");
+  t.throws(function() { txn({couch:COUCH}, noop, noop) }, "Mandatory uri; missing db,id");
+  t.throws(function() { txn({db   :DB   }, noop, noop) }, "Mandatory uri; missing couch,id");
+  t.throws(function() { txn({couch:COUCH, db:DB}, noop, noop) }, "Mandatory uri; missing id");
 
   if (COUCH) {
-    t.throws(function() { TXN({id   :ID   }, noop, noop) }, "Mandatory uri; missing couch,db");
-    t.throws(function() { TXN({couch:COUCH, id:ID}, noop, noop) }, "Mandatory uri");
-    t.throws(function() { TXN({db:DB      , id:ID}, noop, noop) }, "Mandatory uri");
+    t.throws(function() { txn({id   :ID   }, noop, noop) }, "Mandatory uri; missing couch,db");
+    t.throws(function() { txn({couch:COUCH, id:ID}, noop, noop) }, "Mandatory uri");
+    t.throws(function() { txn({db:DB      , id:ID}, noop, noop) }, "Mandatory uri");
     assert.equal(false, noop_ran, "CouchDB: Should never have called noop");
   } else {
-    t.doesNotThrow(function() { TXN({id:ID}, noop, noop) }, 'PouchDB call, only id')
-    t.throws(function() { TXN({id:ID, uri:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with uri')
-    t.throws(function() { TXN({id:ID, url:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with url')
+    t.doesNotThrow(function() { txn({id:ID}, noop, noop) }, 'PouchDB call, only id')
+    t.throws(function() { txn({id:ID, uri:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with uri')
+    t.throws(function() { txn({id:ID, url:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with url')
     t.equal(noop_ran, true, 'PouchDB call with id runs noop()')
   }
 
   t.equal(orig, state.doc_a.val, "Val should not have been updated");
   t.end()
 })
-//
+
+tap.test('Clashing parameters', function(t) {
+  var url = 'http://127.0.0.1:4321/db/doc';
+  var noop_ran = false;
+  var noop = function() { noop_ran = true; };
+
+  thrown(function() { txn({uri:url, couch:COUCH}, noop, noop) }, "Clashing params: uri,couch");
+  thrown(function() { txn({url:url, couch:COUCH}, noop, noop) }, "Clashing params: url,couch");
+  thrown(function() { txn({uri:url, db   :DB   }, noop, noop) }, "Clashing params: uri,db");
+  thrown(function() { txn({url:url, id   :'foo'}, noop, noop) }, "Clashing params: url,id");
+
+  thrown(function() { txn({uri:url, couch:COUCH, db:DB, id:'doc_a'}, noop, noop) }, "Clashing params, uri,couch,db,id");
+
+  t.equal(false, noop_ran, "Noop should never run");
+  t.end()
+
+  function thrown(func, label) {
+    var exception = null;
+    try       { func()        }
+    catch (e) { exception = e }
+
+    var msg = COUCH ? /Clashing/ : /PouchDB disallows/
+    t.ok(exception, 'Exception thrown: ' + label)
+    t.match(exception && exception.message, msg, 'Exception message ' + msg + ': ' + label)
+  }
+})
+
 // TODO
 //
 // db.txn('doc_id', operation, callback)

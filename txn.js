@@ -377,9 +377,9 @@ PouchTransaction.prototype.prep_params = function() {
   var self = this
 
   self.log('Prep PouchDB')
+  assert.ok(!self.req.uri && !self.req.url, 'PouchDB disallows .url or .uri parameters')
   assert.ok(self.id, 'Must provide .id parameter')
   assert.ok(PouchDB && self.db instanceof PouchDB, 'Must provide PouchDB .db parameter')
-  assert.ok(!self.req.uri && !self.req.url, 'PouchDB does not support .url or .uri parameters')
 }
 
 
