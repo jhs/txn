@@ -199,6 +199,45 @@ tap.test('Update with URI', function(t) {
   }
 })
 
+//
+// Some helper operations
+//
+
+function plus(X) {
+  return adder;
+  function adder(doc, to_txn) {
+    if(!doc.val)
+      return to_txn(new Error('No value'));
+    doc.val += X;
+    return to_txn();
+  }
+}
+
+function setter(K, V) {
+  return set;
+  function set(doc, to_txn) {
+    doc[K] = V;
+    return to_txn();
+  }
+}
+
+function waitfor(X) {
+  return finisher;
+  function finisher(doc, to_txn) {
+    setTimeout(finish, X);
+    function finish() {
+      return to_txn();
+    }
+  }
+}
+
+function thrower(er) {
+  return thrower;
+  function thrower() {
+    if(er) throw er;
+  }
+}
+
 // TODO
 //
 // db.txn('doc_id', operation, callback)
