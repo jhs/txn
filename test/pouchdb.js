@@ -131,6 +131,8 @@ tap.test('Required params', function(t) {
     assert.equal(false, noop_ran, "CouchDB: Should never have called noop");
   } else {
     t.doesNotThrow(function() { TXN({id:ID}, noop, noop) }, 'PouchDB call, only id')
+    t.throws(function() { TXN({id:ID, uri:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with uri')
+    t.throws(function() { TXN({id:ID, url:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with url')
     t.equal(noop_ran, true, 'PouchDB call with id runs noop()')
   }
 
