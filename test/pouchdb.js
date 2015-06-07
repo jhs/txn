@@ -174,6 +174,31 @@ tap.test('Clashing parameters', function(t) {
   }
 })
 
+tap.test('Update with URI', function(t) {
+  var loc = COUCH + '/' + DB + '/doc_a';
+  function go() {
+    txn({uri:loc}, plus(e), done)
+  }
+
+  if (COUCH)
+    go()
+  else if (POUCH)
+    t.throws(go, 'PouchDB does not support .uri parameters')
+
+  function done(er, doc) {
+    if(er) throw er;
+    assert.equal(26, doc.val, "Update value in doc_a");
+
+    txn({url:loc}, plus(6), function(er, doc) {
+      if(er) throw er;
+      assert.equal(32, doc.val, "Second update value in doc_a");
+
+      state.doc_a = doc;
+      t.end()
+    })
+  }
+})
+
 // TODO
 //
 // db.txn('doc_id', operation, callback)
