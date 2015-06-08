@@ -44,9 +44,10 @@ tap.test('PouchDB plugin API', function(t) {
 tap.test('Setup', function(t) {
   var doc = {_id:'doc_a', val:23}
 
+  t.plan(2)
   if (COUCH)
     setup_couchdb()
-  else
+  else if (POUCH)
     setup_pouchdb()
 
   function done() {
@@ -56,7 +57,10 @@ tap.test('Setup', function(t) {
     if (typeof txn != 'function')
       throw new Error('txn() not in the global state for further use in testing')
 
-    if (POUCH) {
+    if (COUCH) {
+      t.type(txn.Transaction, 'function', 'CouchDB Transaction class')
+      t.type(txn            , 'function', 'CouchDB txn shortcut')
+    } else if (POUCH) {
       t.type(state.db.Transaction, 'function', 'PouchDB plugin loaded Transaction class')
       t.type(state.db.txn        , 'function', 'PouchDB plugin loaded txn shortcut')
     }
@@ -102,7 +106,7 @@ tap.test('Setup', function(t) {
         request({method:'POST', uri:url, json:doc}, function(er, resp, body) {
           if(er) throw er;
 
-          if(resp.statusCode !== 201 || body.ok !== true)
+          if((resp.statusCode !== 201 && resp.statusCode !== 202) || body.ok !== true)
             throw new Error("Cannot store doc: " + resp.statusCode + ' ' + JSON.stringify(body));
 
           // CouchDB just uses the main API from require().
@@ -135,7 +139,7 @@ tap.test('Required params', function(t) {
     t.throws(function() { txn({id   :ID   }, noop, noop) }, "Mandatory uri; missing couch,db");
     t.throws(function() { txn({couch:COUCH, id:ID}, noop, noop) }, "Mandatory uri");
     t.throws(function() { txn({db:DB      , id:ID}, noop, noop) }, "Mandatory uri");
-    assert.equal(false, noop_ran, "CouchDB: Should never have called noop");
+    t.equal(false, noop_ran, "CouchDB: Should never have called noop");
     t.equal(orig, state.doc_a.val, "Val should not have been updated");
     t.end()
   } else {
@@ -197,11 +201,10 @@ tap.test('Update with URI', function(t) {
 })
 
 tap.test('Update with parameters', function(t) {
-  var opts = {id:state.doc_a._id}
-  if (COUCH) {
-    opts.db = DB
-    opts.couch = COUCH
-  }
+  if (COUCH)
+    var opts = {couch:COUCH, db:DB, id:'doc_a'}
+  else if (POUCH)
+    var opts = {id:'doc_a'}
 
   txn(opts, plus(-7), function(er, doc) {
     if(er) throw er;
@@ -256,8 +259,11 @@ tap.test('Operation timeout', function(t) {
 
 tap.test('Create a document', function(t) {
   txn({id:'no_create'}, setter('foo', 'nope'), function(er, doc) {
-    t.match(er && (er.name || er.message), /not_found/, 'Error on unknown doc ID')
     t.equal(doc, undefined, "Should not have a doc to work with")
+    if (COUCH)
+      t.match(er && er.error, /not_found/, 'Error on unknown doc ID')
+    else if (POUCH)
+      t.match(er && er.name, /not_found/, 'Error on unknown doc ID')
 
     txn({id:'create_me', create:true}, setter('foo', 'yep'), function(er, doc) {
       t.equal(er, null, 'No problem creating a doc with create:true')
@@ -335,9 +341,9 @@ tap.test('Preloaded doc with funny name', function(t) {
     state.db.bulkDocs([doc1, doc2], function(er, body) {
       if (er)
         throw er
-      if (!body || !body[0] || body[0].ok !== true)
+      if (!body || !body[0] || !body[0].id || !body[0].rev)
         throw new Error('Bad bulk docs store: ' + JSON.stringify(body))
-      if (!body || !body[1] || body[1].ok !== true)
+      if (!body || !body[1] || !body[1].id || !body[1].rev)
         throw new Error('Bad bulk docs store: ' + JSON.stringify(body))
       stored()
     })
@@ -345,9 +351,9 @@ tap.test('Preloaded doc with funny name', function(t) {
     request({method:'POST', uri:COUCH+'/'+DB+'/_bulk_docs', json:{docs:[doc1,doc2]}}, function(er, res) {
       if (er)
         throw er
-      if (!res.body || !res.body[0] || res.body[0].ok !== true)
+      if (!res.body || !res.body[0] || !res.body[0].id || !res.body[0].rev)
         throw new Error('Bad bulk docs store: ' + JSON.stringify(res.body))
-      if (!res.body || !res.body[1] || res.body[1].ok !== true)
+      if (!res.body || !res.body[1] || !res.body[1].id || !res.body[1].rev)
         throw new Error('Bad bulk docs store: ' + JSON.stringify(res.body))
       stored()
     })
@@ -480,7 +486,6 @@ tap.test('Concurrent transactions', function(t) {
   function ready(rev) {
     t.notEqual(rev, bad_rev, 'The real revision is not '+bad_rev)
 
-    // Looks like this isn't necessary just yet.
     var _txn = txn
     if (COUCH)
       _txn = txn.defaults({ 'delay':8, 'request':track_request })
@@ -543,14 +548,16 @@ tap.test('After delay', function(t) {
       else
         t.equal(almost(0.25, duration, base_duration), true, 'after=0 should run immediately (about ' + base_duration + ')')
 
+      // The "after" value should be noticeable in tests, but not take too long: about 30% of the base latency.
+      var after = Math.max(250, base_duration * 0.30)
       start = new Date;
-      txn({doc:doc(), create:true, after:250}, set, function(er) {
+      txn({doc:doc(), create:true, after:after}, set, function(er) {
         if(er) throw er;
 
         end = new Date;
         duration = end - start;
         var delay_duration = duration - base_duration;
-        t.equal(almost(0.10, delay_duration, 250), true, "after parameter delays the transaction")
+        t.equal(almost(0.10, delay_duration, after), true, "after parameter delays the transaction")
 
         t.end()
       })
@@ -623,19 +630,18 @@ tap.test('Problematic doc ids', function(t) {
 })
 
 tap.test('Database errors', function(t) {
+  var _txn = txn
   if (COUCH)
-    var _txn = txn.defaults({'request':req_fail})
-  else if (POUCH)
-    var _txn = txn
+    _txn = txn.defaults({'request':req_fail})
 
   _txn({'id':'error_doc'}, setter('foo', 'bar'), result)
 
   // Force a CouchDB failure.
   function req_fail(req, callback) {
-    TXN_lib.req_couch({'method':'PUT', 'uri':COUCH+'/_illegal'}, function(er, res, result) {
+    Txn_lib.req_couch({'method':'PUT', 'uri':COUCH+'/_illegal'}, function(er, res, result) {
       t.ok(er, 'Got a req_couch error')
-      t.equal(er.statusCode, 400, 'HTTP error status embedded in req_couch error')
-      t.equal(er.error, 'illegal_database_name', 'CouchDB error object embedded in req_couch error')
+      t.ok(er.statusCode == 400 || er.statusCode == 403, 'HTTP error status embedded in req_couch error')
+      t.ok(er.error == 'illegal_database_name' || er.error == 'forbidden', 'CouchDB error object embedded in req_couch error')
       return callback(er, res, result)
     })
   }
@@ -644,8 +650,8 @@ tap.test('Database errors', function(t) {
     t.ok(er, 'Got a txn error')
 
     if (COUCH) {
-      t.equal(er.statusCode, 400, 'HTTP error status embedded in txn error')
-      t.equal(er.error, 'illegal_database_name', 'CouchDB error object embedded in txn error')
+      t.ok(er.statusCode == 400 || er.statusCode == 403, 'HTTP error status embedded in txn error')
+      t.ok(er.error == 'illegal_database_name' || er.error == 'forbidden', 'CouchDB error object embedded in txn error')
     } else if (POUCH) {
       t.equal(er.status, 404, 'PouchDB error embedded in a txn error: status')
       t.equal(er.name, 'not_found', 'PouchDB error object embedded in txn error: name')
