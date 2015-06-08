@@ -460,6 +460,59 @@ tap.test('Preloaded doc creation', function(t) {
   })
 })
 
+tap.test('Concurrent transactions', function(t) {
+  var doc = { _id:'conc' }
+  var bad_rev = '1-abc'
+
+  if (COUCH)
+    request({method:'PUT', uri:COUCH+'/'+DB+'/conc', json:doc}, function(er, res) {
+      if (er) throw er
+      t.equal(res.statusCode, 201, 'Good conc creation')
+      t.notEqual(res.body.rev, bad_rev, 'Make sure '+bad_rev+' is not the real revision in CouchDB')
+      ready(res.body.rev)
+    })
+  else if (POUCH)
+    state.db.put(doc, function(er, result) {
+      if (er) throw er
+      ready(result.rev)
+    })
+
+  function ready(rev) {
+    t.notEqual(rev, bad_rev, 'The real revision is not '+bad_rev)
+
+    // Looks like this isn't necessary just yet.
+    var _txn = txn
+    if (COUCH)
+      _txn = txn.defaults({ 'delay':8, 'request':track_request })
+
+    var opts = {id:'conc'}
+    _txn({id:'conc'}, setter('done', true), function(er, doc, txr) {
+      if(er) throw er
+
+      t.equal(doc.done, true, 'Setter should have worked')
+
+      // TODO: Really, there should be a similar mechanism to fool PouchDB. Perhaps a plugin to override .get().
+      if (COUCH)
+        t.equal(txr.tries, 5, 'The faux request wrapper forced this to require many tries')
+
+      t.end()
+    })
+
+    // Return the same response for the document over and over.
+    var gets = 0;
+    function track_request(req, callback) {
+      if(req.method != 'GET' || ! req.uri.match(/\/conc$/))
+        return request.apply(this, arguments);
+
+      gets += 1;
+      if(gets > 3)
+        return request.apply(this, arguments);
+
+      // Return the same thing over and over to produce many conflicts in a row.
+      return callback(null, {statusCode:200}, JSON.stringify({_id:'conc', _rev:bad_rev}));
+    }
+  }
+})
 
 //
 // Some helper operations
