@@ -242,6 +242,17 @@ tap.test('Update with defaults', function(t) {
   })
 })
 
+tap.test('Operation timeout', function(t) {
+  var val = state.doc_a.val;
+  txn({id:'doc_a', timeout:200}, waitfor(100), function(er, doc) {
+    t.equal(er, null, 'No problem waiting 200ms for a 100ms operation')
+
+    txn({id:'doc_a', timeout:200}, waitfor(300), function(er, doc) {
+      t.match(er && er.message, /timeout/, 'Expect a timeout error for a long operation')
+      t.end()
+    })
+  })
+})
 //
 // Some helper operations
 //
