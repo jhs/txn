@@ -20,9 +20,9 @@
     "node"
   ],
   "scripts": {
-    "test": "tap test/pouchdb.js",
-    "test-pouchdb": "env couchdb= tap test/pouchdb.js",
-    "test-couchdb": "env couchdb=${couchdb:-http://127.0.0.1:5984} node test/pouchdb.js"
+    "test": "tap test/txn.js",
+    "test-pouchdb": "env couchdb= tap test/txn.js",
+    "test-couchdb": "env couchdb=${couchdb:-http://127.0.0.1:5984} node test/txn.js"
   },
   "dependencies": {
     "browser-request": "~0.2.1",
