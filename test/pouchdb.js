@@ -622,6 +622,39 @@ tap.test('Problematic doc ids', function(t) {
   }
 })
 
+tap.test('Database errors', function(t) {
+  if (COUCH)
+    var _txn = txn.defaults({'request':req_fail})
+  else if (POUCH)
+    var _txn = txn
+
+  _txn({'id':'error_doc'}, setter('foo', 'bar'), result)
+
+  // Force a CouchDB failure.
+  function req_fail(req, callback) {
+    TXN_lib.req_couch({'method':'PUT', 'uri':COUCH+'/_illegal'}, function(er, res, result) {
+      t.ok(er, 'Got a req_couch error')
+      t.equal(er.statusCode, 400, 'HTTP error status embedded in req_couch error')
+      t.equal(er.error, 'illegal_database_name', 'CouchDB error object embedded in req_couch error')
+      return callback(er, res, result)
+    })
+  }
+
+  function result(er, doc, txr) {
+    t.ok(er, 'Got a txn error')
+
+    if (COUCH) {
+      t.equal(er.statusCode, 400, 'HTTP error status embedded in txn error')
+      t.equal(er.error, 'illegal_database_name', 'CouchDB error object embedded in txn error')
+    } else if (POUCH) {
+      t.equal(er.status, 404, 'PouchDB error embedded in a txn error: status')
+      t.equal(er.name, 'not_found', 'PouchDB error object embedded in txn error: name')
+    }
+
+    t.end()
+  }
+})
+
 //
 // Some helper operations
 //
