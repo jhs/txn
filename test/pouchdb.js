@@ -514,6 +514,50 @@ tap.test('Concurrent transactions', function(t) {
   }
 })
 
+tap.test('After delay', function(t) {
+  var set = setter('x', 1);
+  var start, end, duration;
+
+  var num = 0;
+  function doc() {
+    num += 1;
+    return {"_id":"after_"+num};
+  }
+
+  start = new Date;
+  txn({doc:doc(), create:true, after:null}, set, function(er) {
+    if(er) throw er;
+
+    end = new Date;
+    var base_duration = end - start;
+
+    start = new Date;
+    txn({doc:doc(), create:true, after:0}, set, function(er) {
+      if(er) throw er;
+
+      end = new Date;
+      duration = end - start;
+
+      if(base_duration < 10)
+        t.equal(duration < 10, true, 'after=0 should run immediately')
+      else
+        t.equal(almost(0.25, duration, base_duration), true, 'after=0 should run immediately (about ' + base_duration + ')')
+
+      start = new Date;
+      txn({doc:doc(), create:true, after:250}, set, function(er) {
+        if(er) throw er;
+
+        end = new Date;
+        duration = end - start;
+        var delay_duration = duration - base_duration;
+        t.equal(almost(0.10, delay_duration, 250), true, "after parameter delays the transaction")
+
+        t.end()
+      })
+    })
+  })
+})
+
 //
 // Some helper operations
 //
@@ -551,6 +595,16 @@ function thrower(er) {
   function thrower() {
     if(er) throw er;
   }
+}
+
+//
+// Utilities
+//
+
+function almost(margin, actual, expected) {
+  var delta = Math.abs(actual - expected)
+  var real_margin = delta / expected
+  return (real_margin <= margin)
 }
 
 // TODO
