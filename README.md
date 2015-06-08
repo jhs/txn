@@ -113,9 +113,10 @@ function add_done(er, doc, txr) {
   if (er) {
     console.log('PouchDB error while tabulating points: ' + er);
   } else {
-    // txr is the "transaction result". Usually you can ignore it, but it can be interesting.
-    // For example, if Txn retries due to a document conflict, you can see that in txr.
-    console.log('It took ' + txr.tries + ' tries to give you ' + doc.points + ' points');
+    // txr is the "transaction result". Usually you can ignore it, but it can
+    // be interesting. For example, if Txn retries due to a document conflict,
+    // you can see that in txr.
+    console.log('It took '+txr.tries+' tries to give you '+doc.points+' points');
   }
 }
 ```
