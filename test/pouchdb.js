@@ -299,6 +299,34 @@ tap.test('Timestamps', function(t) {
   })
 })
 
+tap.test('Preloaded doc with no conflicts', function(t) {
+  txn({id:'doc_b', create:true}, setter('type','first'), function(er, doc_b, txr) {
+    if(er) throw er;
+    t.equal(doc_b.type, 'first', 'Create doc for preload')
+    t.equal(txr.tries, 1, 'Takes 1 try for doc update')
+    t.equal(txr.fetches, 1, 'Takes 1 fetch for doc update')
+
+    var ops = 0;
+    function update_b(doc, to_txn) {
+      ops += 1;
+      doc.type = 'preloaded';
+      return to_txn();
+    }
+
+    txn({doc:doc_b}, update_b, function(er, doc, txr) {
+      if(er) throw er;
+
+      t.equal(doc.type, 'preloaded', 'Preloaded operation runs normally')
+      t.equal(ops, 1, 'Only one op for preloaded doc without conflicts')
+      t.equal(txr.tries, 1, 'One try for preloaded doc without conflicts')
+      t.equal(txr.fetches, 0, 'No fetches for preloaded doc without conflicts')
+
+      state.doc_b = doc
+      t.end()
+    })
+  })
+})
+
 
 //
 // Some helper operations
