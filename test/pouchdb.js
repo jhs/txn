@@ -548,8 +548,8 @@ tap.test('After delay', function(t) {
       else
         t.equal(almost(0.25, duration, base_duration), true, 'after=0 should run immediately (about ' + base_duration + ')')
 
-      // The "after" value should be noticeable in tests, but not take too long: about 30% of the base latency.
-      var after = Math.max(250, base_duration * 0.30)
+      // The "after" value should be noticeable in tests, but not take too long: about 100% of the base latency.
+      var after = Math.max(250, base_duration * 1.00)
       start = new Date;
       txn({doc:doc(), create:true, after:after}, set, function(er) {
         if(er) throw er;
@@ -557,7 +557,7 @@ tap.test('After delay', function(t) {
         end = new Date;
         duration = end - start;
         var delay_duration = duration - base_duration;
-        t.equal(almost(0.10, delay_duration, after), true, "after parameter delays the transaction")
+        t.equal(almost(0.15, delay_duration, after), true, "after parameter delays the transaction: "+delay_duration+' vs '+after)
 
         t.end()
       })
