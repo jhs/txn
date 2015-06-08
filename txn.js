@@ -400,12 +400,11 @@ PouchTransaction.prototype.get = function(callback) {
   self.log('Fetch doc: %s', self.id)
 
   return self.pouchdb.get(self.id, function(er, doc) {
-    self.log('Fetch %s result: %j', self.id, [er, doc])
     // The callback wants request-style [er, response, body] parameters.
     if (er && (!er.status || !er.name))
       callback(er) // Unknown error: .status or .name is missing.
     else if (er)
-      callback(null, {statusCode:er.status}, {error:er.name}) // e.g. status=404 name=not_found
+      callback(er, {statusCode:er.status}, {error:er.name}) // e.g. status=404 name=not_found
     else
       callback(null, {statusCode:200}, doc)
   })
@@ -420,7 +419,7 @@ PouchTransaction.prototype.put = function(doc, callback) {
     if (er && (!er.status || !er.name))
       callback(er) // Unknown error: .status or .name is missing.
     else if (er)
-      callback(null, {statusCode:er.status}, {error:er.name}) // e.g. status=409 name=conflict
+      callback(er, {statusCode:er.status}, {error:er.name}) // e.g. status=409 name=conflict
     else
       callback(null, {statusCode:201}, result)
   })

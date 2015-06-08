@@ -256,7 +256,7 @@ tap.test('Operation timeout', function(t) {
 
 tap.test('Create a document', function(t) {
   txn({id:'no_create'}, setter('foo', 'nope'), function(er, doc) {
-    t.match(er && er.message, /not_found/, 'Error on unknown doc ID')
+    t.match(er && (er.name || er.message), /not_found/, 'Error on unknown doc ID')
     t.equal(doc, undefined, "Should not have a doc to work with")
 
     txn({id:'create_me', create:true}, setter('foo', 'yep'), function(er, doc) {
