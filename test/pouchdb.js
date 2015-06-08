@@ -268,6 +268,37 @@ tap.test('Create a document', function(t) {
   })
 })
 
+tap.test('Timestamps', function(t) {
+  txn({id:'doc_a'}, plus(-6), function(er, doc) {
+    if(er) throw er;
+
+    t.equal(doc.val, 30, "Normal update works")
+    t.equal(doc.created_at, undefined, 'Normal update has no create timestamp')
+    t.equal(doc.updated_at, undefined, 'Normal update has no update timestamp')
+
+    txn({id:'doc_a', timestamps:true}, plus(2), function(er, doc) {
+      if(er) throw er;
+
+      t.equal(doc.val, 32, "Timestamps update works")
+      t.equal(doc.created_at, undefined, "Updating existing docs does not add creation timestamp")
+      t.type(doc.updated_at, 'string', "Update with timestamps")
+
+      state.doc_a = doc
+
+      txn({id:'stamps', create:true, timestamps:true}, setter('val', 10), function(er, doc) {
+        if(er) throw er;
+
+        t.equal(doc.val, 10, "Timestamps create works")
+        t.type(doc.created_at, 'string', "Create with created_at")
+        t.type(doc.updated_at, 'string', "Create with updated_at")
+        t.equal(doc.updated_at, doc.created_at, "Creation and update stamps are equal")
+
+        t.end()
+      })
+    })
+  })
+})
+
 
 //
 // Some helper operations
