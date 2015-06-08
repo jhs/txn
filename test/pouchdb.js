@@ -27,6 +27,12 @@ var TICK = typeof global.setImmediate !== 'function' ? process.nextTick : setImm
 var DB = process.env.db || 'txn_test';
 var state = {};
 
+// If $couchdb is defined, then test against Apache CouchDB. Otherwise, test against PouchDB.
+var COUCH = process.env.couchdb
+var POUCH = !COUCH
+
+// This will be set in setup_*() and used throughout the tests.
+var txn = function() { throw new Error('txn not set yet') }
 
 tap.test('PouchDB plugin API', function(t) {
   t.type(Txn.PouchDB, 'object', 'Txn PouchDB plugin in the API')
@@ -34,13 +40,6 @@ tap.test('PouchDB plugin API', function(t) {
   t.type(Txn.PouchDB.txn        , 'function', 'Transaction shortcut in the API')
   t.end()
 })
-
-// If $couchdb is defined, then test against Apache CouchDB. Otherwise, test against PouchDB.
-var COUCH = process.env.couchdb
-var POUCH = !COUCH
-
-// This will be set in setup_*() and used throughout the tests.
-var txn = function() { throw new Error('txn not set yet') }
 
 tap.test('Setup', function(t) {
   var doc = {_id:'doc_a', val:23}
@@ -124,7 +123,7 @@ tap.test('Required params', function(t) {
   var orig = state.doc_a.val;
 
   var noop_ran = false;
-  var noop = function() { noop_ran = true; };
+  var noop = function(_doc, to_txn) { noop_ran = true; to_txn() }
 
   t.throws(function() { txn({}, noop, noop) }, "Mandatory uri");
 
@@ -137,21 +136,24 @@ tap.test('Required params', function(t) {
     t.throws(function() { txn({couch:COUCH, id:ID}, noop, noop) }, "Mandatory uri");
     t.throws(function() { txn({db:DB      , id:ID}, noop, noop) }, "Mandatory uri");
     assert.equal(false, noop_ran, "CouchDB: Should never have called noop");
+    t.equal(orig, state.doc_a.val, "Val should not have been updated");
+    t.end()
   } else {
-    t.doesNotThrow(function() { txn({id:ID}, noop, noop) }, 'PouchDB call, only id')
     t.throws(function() { txn({id:ID, uri:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with uri')
     t.throws(function() { txn({id:ID, url:'http://127.0.0.1:5984/db/doc'}, noop, noop) }, 'PouchDB call with url')
-    t.equal(noop_ran, true, 'PouchDB call with id runs noop()')
+    t.doesNotThrow(function() { txn({id:ID}, noop, end) }, 'PouchDB call, only id')
   }
 
-  t.equal(orig, state.doc_a.val, "Val should not have been updated");
-  t.end()
+  function end() {
+    t.equal(noop_ran, true, 'PouchDB call with id runs noop()')
+    t.end()
+  }
 })
 
 tap.test('Clashing parameters', function(t) {
   var url = 'http://127.0.0.1:4321/db/doc';
   var noop_ran = false;
-  var noop = function() { noop_ran = true; };
+  var noop = function(_doc, to_txn) { noop_ran = true; to_txn() }
 
   thrown(function() { txn({uri:url, couch:COUCH}, noop, noop) }, "Clashing params: uri,couch");
   thrown(function() { txn({url:url, couch:COUCH}, noop, noop) }, "Clashing params: url,couch");
@@ -175,28 +177,38 @@ tap.test('Clashing parameters', function(t) {
 })
 
 tap.test('Update with URI', function(t) {
-  var loc = COUCH + '/' + DB + '/doc_a';
-  function go() {
-    txn({uri:loc}, plus(e), done)
+  function opts() {
+    return COUCH ? {url: COUCH + '/' + DB + '/doc_a'}
+                 : {id:'doc_a'}
   }
 
-  if (COUCH)
-    go()
-  else if (POUCH)
-    t.throws(go, 'PouchDB does not support .uri parameters')
-
-  function done(er, doc) {
+  txn(opts(), plus(3), function(er, doc) {
     if(er) throw er;
-    assert.equal(26, doc.val, "Update value in doc_a");
+    t.equal(26, doc.val, "Update value in doc_a");
 
-    txn({url:loc}, plus(6), function(er, doc) {
+    txn(opts(), plus(6), function(er, doc) {
       if(er) throw er;
-      assert.equal(32, doc.val, "Second update value in doc_a");
+      t.equal(32, doc.val, "Second update value in doc_a");
 
       state.doc_a = doc;
       t.end()
     })
+  })
+})
+
+tap.test('Update with parameters', function(t) {
+  var opts = {id:state.doc_a._id}
+  if (COUCH) {
+    opts.db = DB
+    opts.couch = COUCH
   }
+
+  txn(opts, plus(-7), function(er, doc) {
+    if(er) throw er;
+
+    t.equal(25, doc.val, "Update via couch args");
+    t.end()
+  })
 })
 
 //

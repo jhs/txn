@@ -20,10 +20,6 @@ var util = require('util')
   , assert = require('assert')
   , obj_diff = require('obj_diff')
 
-var PouchDB = null
-try { PouchDB = require('pouchdb') }
-catch (er) {}
-
 var EventEmitter = events.EventEmitter2 || events.EventEmitter
 var TICK = typeof global.setImmediate !== 'function' ? process.nextTick : setImmediate
 
@@ -42,6 +38,7 @@ require('defaultable').def(module,
   , 'maxSockets'         : 100
   , 'proxy'              : null
   , 'req'                : null
+  , 'pouchdb'            : null
   , 'couch'              : null
   , 'db'                 : null
   , 'id'                 : null
@@ -54,8 +51,14 @@ var lib = require('./lib');
 module.exports = couch_doc_txn
 module.exports.Txn = Transaction
 module.exports.Transaction = Transaction
-module.exports.PouchDB = {Transaction:Transaction, txn:couch_doc_txn}
+module.exports.PouchDB = {Transaction:Transaction, txn:pouch_doc_txn}
 
+
+function pouch_doc_txn(opts, operation, callback) {
+  opts = opts || {}
+  opts.pouchdb = this
+  return couch_doc_txn(opts, operation, callback)
+}
 
 function couch_doc_txn(fetch_req, operation, callback) {
   assert.equal('function', typeof callback, 'Need callback');
@@ -77,13 +80,10 @@ function couch_doc_txn(fetch_req, operation, callback) {
   opts.req       = fetch_req;
   opts.operation = operation;
 
-  var TxnClass = Transaction
-  if (PouchDB && this instanceof PouchDB) {
-    TxnClass = PouchTransaction
-    opts.db = this
-  }
-
-  var txn = new TxnClass(opts);
+  if (opts.pouchdb)
+    var txn = new PouchTransaction(opts)
+  else
+    var txn = new Transaction(opts)
 
   txn.on('timeout', function() {
     var err = new Error('Transaction ('+txn.name+') timeout');
@@ -222,32 +222,26 @@ Transaction.prototype.attempt = function() {
 
 Transaction.prototype.run = function() {
   var self = this;
-  self.log('Transaction '+self.name+' (' + self.tries + '/' + self.max_tries + '): ' + self.uri);
+  self.log('Transaction %s (%s/%s): %s', self.name, self.tries, self.max_tries, self.uri || self.id)
 
   if(self.doc) {
-    self.log('Skipping fetch, assuming known doc: ' + self.doc._id)
-    run_op(self.doc, !('_rev' in self.doc));
-  } else {
-    self.log('Fetching doc: ' + (self.id || self.uri_to_id(self.uri)));
-
-    self.req.method = 'GET';
-    self.req.uri = self.uri;
-    delete self.req.url;
-
-    self.fetches += 1;
-    lib.req_couch(self.req, function(er, resp, couch_doc) {
-      var is_create = !!self.create && resp.statusCode == 404 && couch_doc.error == 'not_found';
-      if(er && !is_create)
-        return self.emit('error', er);
-
-      if(is_create) {
-        couch_doc = { "_id": decodeURIComponent(self.id || self.uri_to_id(self.uri)) };
-        self.log('Creating new doc: ' + lib.JS(couch_doc));
-      }
-
-      return run_op(couch_doc, is_create);
-    })
+    self.log('Skip fetch, assuming known doc: ' + self.doc._id)
+    return run_op(self.doc, !('_rev' in self.doc))
   }
+
+  self.fetches += 1;
+  self.get(function (er, res, couch_doc) {
+    var is_create = !!self.create && resp.statusCode == 404 && couch_doc.error == 'not_found';
+    if(er && !is_create)
+      return self.emit('error', er);
+
+    if(is_create) {
+      couch_doc = { "_id": decodeURIComponent(self.id || self.uri_to_id(self.uri)) };
+      self.log('Create new doc: ' + lib.JS(couch_doc));
+    }
+
+    return run_op(couch_doc, is_create);
+  })
 
   function run_op(doc, is_create) {
     if(!doc._id)
@@ -255,6 +249,7 @@ Transaction.prototype.run = function() {
     if(!doc._rev && !is_create)
       return self.emit('error', new Error('No _rev: ' + lib.JS(doc)));
 
+    self.log('Run operation (create=%j): %s', is_create, doc._id)
     delete self.doc; // In case it was provided.
 
     var original = { "doc": lib.JDUP(doc)
@@ -281,7 +276,7 @@ Transaction.prototype.run = function() {
       delete self.op_timer;
 
       if(already_done) {
-        self.log('Ignoring operation after timeout');
+        self.log('Ignore operation after timeout');
         return self.emit('ignore');
       } else
         already_done = true;
@@ -290,13 +285,13 @@ Transaction.prototype.run = function() {
         return self.emit('error', er);
 
       if(new_doc) {
-        self.log('Using new doc: ' + lib.JS(new_doc));
+        self.log('Use new doc: ' + lib.JS(new_doc));
         self.emit('replace', doc, new_doc);
         doc = new_doc;
       }
 
       if(obj_diff.atmost(original.doc, doc, {})) {
-        self.log('Skipping txn update for unchanged doc: ' + original.id);
+        self.log('Skip txn update for unchanged doc: ' + original.id);
         return self.emit('done', doc);
       }
 
@@ -314,15 +309,9 @@ Transaction.prototype.run = function() {
           doc.created_at = doc.updated_at;
       }
 
-      var update_req = { method: 'PUT'
-                       , uri   : self.uri
-                       , json  : doc
-                       };
-
-      self.log('Updating transaction ('+self.name+'): ' + update_req.uri);
+      self.log('Update transaction (%s): %s', self.name, self.uri || self.id)
       self.stores += 1
-
-      lib.req_couch(update_req, function(er, resp, result) {
+      self.put(doc, function(er, resp, result) {
         if(er && resp && resp.statusCode === 409 && result.error === "conflict") {
           // Retryable error.
           self.log('Conflict: '+self.name);
@@ -340,6 +329,24 @@ Transaction.prototype.run = function() {
       })
     }
   } // run_op
+}
+
+Transaction.prototype.get = function(callback) {
+  var self = this
+  self.log('Fetch doc: ' + (self.id || self.uri_to_id(self.uri)))
+
+  self.req.method = 'GET';
+  self.req.uri = self.uri;
+  delete self.req.url;
+
+  return lib.req_couch(self.req, callback)
+}
+
+Transaction.prototype.put = function(doc, callback) {
+  var self = this
+  var update_req = {method:'PUT', uri:self.uri, json:doc}
+  self.log('Update request: %j', update_req)
+  return lib.req_couch(update_req, callback)
 }
 
 Transaction.prototype.cancel = function() {
@@ -371,7 +378,8 @@ function PouchTransaction (opts) {
   Transaction.call(self, opts)
 
   self.type = 'pouch'
-  self.log = opts.log || debug('txn:pouchdb')
+  self.log = opts.log || DEFAULT.pouchdb_log
+  self.pouchdb = opts.pouchdb || DEFAULT.pouchdb
 }
 
 PouchTransaction.prototype.prep_params = function() {
@@ -380,7 +388,38 @@ PouchTransaction.prototype.prep_params = function() {
   self.log('Prep PouchDB')
   assert.ok(!self.req.uri && !self.req.url, 'PouchDB disallows .url or .uri parameters')
   assert.ok(self.id, 'Must provide .id parameter')
-  assert.ok(PouchDB && self.db instanceof PouchDB, 'Must provide PouchDB .db parameter')
+  assert.ok(self.pouchdb, 'Must provide .pouchdb parameter')
+}
+
+PouchTransaction.prototype.get = function(callback) {
+  var self = this
+  self.log('Fetch doc: %s', self.id)
+
+  return self.pouchdb.get(self.id, function(er, doc) {
+    self.log('Fetch %s result: %j', self.id, [er, doc])
+    // The callback wants request-style [er, response, body] parameters.
+    if (er && (!er.status || !er.name))
+      callback(er) // Unknown error: .status or .name is missing.
+    else if (er)
+      callback(null, {statusCode:er.status}, {error:er.name}) // e.g. status=404 name=not_found
+    else
+      callback(null, {statusCode:200}, doc)
+  })
+}
+
+PouchTransaction.prototype.put = function(doc, callback) {
+  var self = this
+  self.log('Put doc: %j', doc)
+
+  // The callback wants request-style [er, response, body] parameters.
+  return self.pouchdb.put(doc, function(er, result) {
+    if (er && (!er.status || !er.name))
+      callback(er) // Unknown error: .status or .name is missing.
+    else if (er)
+      callback(null, {statusCode:er.status}, {error:er.name}) // e.g. status=409 name=conflict
+    else
+      callback(null, {statusCode:201}, result)
+  })
 }
 
 
