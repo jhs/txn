@@ -242,13 +242,13 @@ Note, Txn automatically sets the `_id` and `_rev` fields. The operation function
 
 When Txn is all done, it will run your final callback function with the results.
 
-The callback function receives two parameters:
+The callback function receives three parameters:
 
 1. An error object, either from Txn (e.g. too many conflicts, operation timeout, HTTP error) or the one sent by *operation_func*. Txn will set various fields depending on the type of error.
   * `timeout` if the operation function timed out.
   * `conflict` and `tries` if there was an MVCC conflict and the number of retries was exhausted
 2. The final committed object.
-3. A transaction object with information about the process. Useful fields:
+3. A transaction result object with information about the process. Useful fields:
   * `tries`: The number of tries the entire run took (`1` means the operation worked on the first try)
   * `name`: The name of this transaction (your operation function name)
 
