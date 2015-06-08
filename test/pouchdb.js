@@ -253,6 +253,22 @@ tap.test('Operation timeout', function(t) {
     })
   })
 })
+
+tap.test('Create a document', function(t) {
+  txn({id:'no_create'}, setter('foo', 'nope'), function(er, doc) {
+    t.match(er && er.message, /not_found/, 'Error on unknown doc ID')
+    t.equal(doc, undefined, "Should not have a doc to work with")
+
+    txn({id:'create_me', create:true}, setter('foo', 'yep'), function(er, doc) {
+      t.equal(er, null, 'No problem creating a doc with create:true')
+      t.equal(doc.foo, 'yep', 'Created doc data looks good')
+      t.equal(Object.keys(doc).length, 3, "No unexpected fields in doc create")
+      t.end()
+    })
+  })
+})
+
+
 //
 // Some helper operations
 //

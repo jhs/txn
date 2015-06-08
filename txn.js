@@ -232,7 +232,7 @@ Transaction.prototype.run = function() {
 
   self.fetches += 1;
   self.get(function (er, res, couch_doc) {
-    var is_create = !!self.create && resp.statusCode == 404 && couch_doc.error == 'not_found';
+    var is_create = !!self.create && res.statusCode == 404 && couch_doc.error == 'not_found';
     if(er && !is_create)
       return self.emit('error', er);
 
@@ -312,8 +312,8 @@ Transaction.prototype.run = function() {
 
       self.log('Update transaction (%s): %s', self.name, self.uri || self.id)
       self.stores += 1
-      self.put(doc, function(er, resp, result) {
-        if(er && resp && resp.statusCode === 409 && result.error === "conflict") {
+      self.put(doc, function(er, res, result) {
+        if(er && res && res.statusCode === 409 && result.error === "conflict") {
           // Retryable error.
           self.log('Conflict: '+self.name);
           self.emit('conflict', self.tries);
