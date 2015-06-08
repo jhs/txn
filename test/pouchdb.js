@@ -558,6 +558,70 @@ tap.test('After delay', function(t) {
   })
 })
 
+tap.test('Problematic doc ids', function(t) {
+  var tests = [ {'_id':'doc with space'}
+              , 'has space'
+              , 'has!bang'
+              , {'_id':'doc with ! bang'}
+              , 'The "quick" (?) brown หมาจิ้งจอก jumps over the lazy dog!'
+              ]
+
+  // Per test, make_doc() does 1 check; result does 5 checks for couchdb, 4 for pouchdb.
+  t.plan(tests.length * (COUCH ? 1+5 : 1+4))
+
+  check_id()
+  function check_id() {
+    var check = tests.shift()
+    if(!check)
+      return t.end()
+
+    if(typeof check == 'string')
+      var opts = {'create':true, 'id':check}
+    else
+      var opts = {'create':true, 'doc':check}
+
+    var id = check._id || check
+    var value = Math.random()
+    txn(opts, make_doc, result)
+
+    function make_doc(doc, to_txn) {
+      t.equal(doc._id, id, 'Incoming doc ID should be right')
+      doc.key = value
+      return to_txn()
+    }
+
+    function result(er, doc, txr) {
+      if(er) throw er
+      var id_re = encodeURIComponent(id)
+      id_re = id_re.replace(/\(/g, '\\(').replace(/\)/g, '\\)')
+      id_re = new RegExp('/' + id_re + '$')
+
+      t.equal(doc._id, id, 'Created doc ID is right')
+      if (COUCH)
+        t.match(txr.uri, id_re, 'Transaction URL uses the right ID')
+
+      var doc_url = COUCH + '/' + DB + '/' + encodeURIComponent(id)
+
+      if (COUCH)
+        request({url:doc_url, json:true}, function(er, res) {
+          if(er) throw er
+          t.equal(res.statusCode, 200, 'Got the doc with problematic ID: '+JSON.stringify(id))
+          t.equal(res.body._id, id, 'Doc has the expected id: '+JSON.stringify(id))
+          t.equal(res.body.key, value, 'Doc has the planted value: '+JSON.stringify(id))
+          check_id()
+        })
+
+      else if (POUCH)
+        state.db.get(id, function(er, doc) {
+          t.equal(er, null, 'No problem fetching ID: '+JSON.stringify(id))
+          t.equal(doc._id, id, 'Doc has expected ID: '+JSON.stringify(id))
+          t.equal(doc.key, value, 'Doc has the planted value: '+JSON.stringify(id))
+          check_id()
+        })
+    }
+  }
+})
+
 //
 // Some helper operations
 //
