@@ -33,7 +33,7 @@ var url = "https://example.cloudant.com/my_db/my_doc";
 txn({uri:url}, change_the_doc, change_done);
 
 function change_the_doc(doc, to_txn) {
-  // I run once the doc is fetched. Usually, I run once. But, if Txn detects
+  // I run on the doc that is fetched. Usually, I run once. But, if Txn detects
   // a document conflict, I may run multiple times as Txn retries.
   doc.awesome = (doc.type == "teacher") ? true : 'maybe';
   request("http://twitter.com/" + doc.twitter, function(er, resp, body) {
@@ -205,7 +205,7 @@ This is your primary *worker function* to receive, react-to, and modify the data
 The function receives two parameters.
 
 1. The fetched JSON object, often called **doc**
-2. A callback to return processing to Txn, oten called **to_txn**. The callback takes two parameters:
+2. A callback to return processing to Txn, often called **to_txn**. The callback takes two parameters:
   1. An error object
   2. An optional *replacement object*. If provided, modifications to **doc** are ignored and this object is used instead.
 
