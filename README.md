@@ -1,17 +1,17 @@
-# Transaction: Javascript ACID objects
+# Transaction: JavaScript ACID objects
 
 [![build
 status](https://secure.travis-ci.org/nodejitsu/txn.png)](http://travis-ci.org/nodejitsu/txn)
 
-Transaction (or *Txn*) is a library to load, modify, and commit Javascript objects in atomic, all-or-nothing operations. It comes from internal Iris Couch tooling, inspired by Google [App Engine transactions][app_engine_txn].
+Transaction (or *Txn*) is a library to load, modify, and commit JavaScript objects in atomic, all-or-nothing operations. It comes from internal Iris Couch tooling, inspired by Google [App Engine transactions][app_engine_txn].
 
-Transaction is great for using CouchDB documents as state machines, moving through a workflow in discrete steps.
+Transaction is great for making discrete changes to CouchDB, Cloudant, and PouchDB documents.
 
 ## Objective
 
-Txn **guarantees** that data modifications either *commit* completely, or *roll back* completely ([MVCC][mvcc]). For roll-backs, Txn automatically and transparently retries the operation a few times until it commits. I like me some transaction and you should too:
+Txn **guarantees** that data modifications either *commit* completely, or *roll back* completely ([MVCC][mvcc]). Txn automatically and transparently retries the operation a few times until it commits. I like me some transaction and you should too:
 
-1. Write a simple, clear *operation* function to process a chunk of data (Javascript object)
+1. Write a simple, clear *operation* function to process a chunk of data (JavaScript object)
 1. Other parts of the program trigger the operation for various objects with various IDs.
 1. Operations might accidently run *multiple times*, even *concurrently*, perhaps behaving *unpredictably*, probably *timing out* when web sites go down. In other words, it is working within the real world.
 1. No matter. Transaction ensures that, for a given object ID, changes are atomic, consistent, isolated, and durable (ACID guarantees).
@@ -22,21 +22,19 @@ Install Transaction with NPM
 
     $ npm install txn
 
-Here's how it works:
+Usage:
 
 ```javascript
-var txn = require("txn")
-  , url = "https://example.iriscouch.com/my_db/my_doc";
-  , request = require('request');
+var txn = require("txn");
+var request = require('request');
 
-txn({uri:url}, change_the_doc, function(error, newDoc) {
-  if(error)
-    return console.error("Sorry, the change didn't stick: " + error);
-  else
-    console.log("Yay! The new doc is: " + JSON.stringify(newDoc));
-})
+var url = "https://example.cloudant.com/my_db/my_doc";
+
+txn({uri:url}, change_the_doc, change_done);
 
 function change_the_doc(doc, to_txn) {
+  // I run once the doc is fetched. Usually, I run once. But, if Txn detects
+  // a document conflict, I may run multiple times as Txn retries.
   doc.awesome = (doc.type == "teacher") ? true : 'maybe';
   request("http://twitter.com/" + doc.twitter, function(er, resp, body) {
     if(er)
@@ -45,7 +43,98 @@ function change_the_doc(doc, to_txn) {
     return to_txn();
   })
 }
+
+function change_done(error, newDoc) {
+  // I run once, after the transaction is complete.
+  if(error)
+    return console.log("Sorry, the change didn't stick: " + error);
+  else
+    console.log("Yay! The new doc is: " + JSON.stringify(newDoc));
+})
 ```
+
+<a name="pouchdb"></a>
+## PouchDB
+
+Txn supports PouchDB. The npm package provides a PouchDB plugin.
+
+```javascript
+var PouchDB = require('PouchDB');
+var Txn = require('txn');
+
+// Load Txn support into PouchDB.
+PouchDB.plugin(Txn.PouchDB);
+
+// Now your PouchDB database has transaction support!
+var db = new PouchDB('example');
+
+// This operation adds 5 to a "count" field.
+function add_five(doc, to_txn) {
+  if (!doc.count) {
+    doc.count = 0;
+  }
+
+  doc.count = doc.count + 5;
+  return to_txn();
+}
+
+db.txn({id:'my_doc', create:true, timestamps:true}, add_five, function(er, doc) {
+  if (er)
+    console.log('Problem creating my_doc: ' + er);
+  else
+    console.log('Document created ' + doc.created_at + ' count = ' + doc.count);
+})
+```
+
+<a name="serial"></a>
+## Serial Transactions
+
+Txn eliminates a classic mistake when using an MVCC database: lost concurrent updates. Txn is here to simplify and clarify concurrent updates.
+
+```javascript
+var PouchDB = require('PouchDB');
+var Txn = require('txn');
+PouchDB.plugin(Txn.PouchDB);
+
+var db = new PouchDB('example');
+
+// Add five points. What could be simpler?
+function add_five(doc, to_txn) {
+  doc.points = (doc.points || 0) + 5;
+  return to_txn();
+}
+
+// Run add_five three times, at the same time! The result will always be 15.
+db.txn({id:'points', create:true}, add_five, add_done);
+db.txn({id:'points', create:true}, add_five, add_done);
+db.txn({id:'points', create:true}, add_five, add_done);
+
+function add_done(er, doc, txr) {
+  if (er) {
+    console.log('PouchDB error while tabulating points: ' + er);
+  } else {
+    // txr is the "transaction result". Usually you can ignore it, but it can be interesting.
+    // For example, if Txn retries due to a document conflict, you can see that in txr.
+    console.log('It took ' + txr.tries + ' tries to give you ' + doc.points + ' points');
+  }
+}
+```
+
+Example output:
+
+```
+It took 1 tries to give you 5 points
+It took 2 tries to give you 10 points
+It took 3 tries to give you 15 points
+```
+
+What that means:
+
+1. One Txn call stored `{"points":5}` on the first try. The others both failed with a conflict. So they each retried.
+2. A second Txn call then succeeded, storing `{"points":10}` on its second try. But the third failed yet again.
+3. The third Txn call finally succeeded, storing `{"points":10}` on its third try.
+
+If this example is confusing or uninteresting to you, not to worry! In any case, Txn is usually simpler than writing your own fetching and storing code for your database. Just provide a document ID, and a function to change the document.
 
 <a name="api"></a>
 ## API
@@ -75,14 +164,16 @@ txn(**request_obj**, **operation_func**, **txn_callback_func**)
 
 ### request_obj
 
-The **request_obj** is for Mikeal Rogers's [request][req] module. (Txn uses *request* internally.) Txn supports some additional optional fields in this object.
+The **request_obj** is for the [request][req] module. (Txn uses *request* internally.) Txn supports some additional optional fields in this object.
 
 * Mandatory: Some location of the data. Everything else is optional.
-  * *either* **uri** | Location to GET the data and PUT it back. Example: `"https://me:secret@example.iriscouch.com/my_db/my_doc"`
-  * *or* broken into parts:
-     * **couch** | URI of the CouchDB server. Example: `"https://me:secret@example.iriscouch.com"`
-     * **db** | Name of the Couch database. Example: `"my_db"`
-     * **id** | ID of the Couch document. Example: `"my_doc"`
+  * For **CouchDB**, including **Cloudant**:
+    * *either* **uri** | Location to GET the data and PUT it back. Example: `"https://me:secret@example.iriscouch.com/my_db/my_doc"`
+    * *or* broken into parts:
+       * **couch** | URI of the CouchDB server. Example: `"https://me:secret@example.iriscouch.com"`
+       * **db** | Name of the Couch database. Example: `"my_db"`
+       * **id** | ID of the Couch document. Example: `"my_doc"`
+  * For **PouchDB**, only the **id** field is needed.
 * **create** | If `true`, missing documents are considered empty objects, `{}`, passed to the operation. If `false`, missing documents are considered errors, passed to the callback. Newly-created objects will not have a `_rev` field.
 * **doc** | Skip the first fetch, assume *doc* is initial data value. Notes:
   * This is useful with `_changes?include_docs=true`
@@ -103,7 +194,6 @@ For example:
 , create    : true          // Use missing doc IDs to create new docs
 , timestamps: true          // Automatic created_at and updated_at fields
 , timeout   : 5 * 60 * 1000 // Five minutes before assuming the operation failed.
-, log_level : "debug"       // Detailed output of what's going on
 }
 ```
 
