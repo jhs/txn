@@ -327,6 +327,65 @@ tap.test('Preloaded doc with no conflicts', function(t) {
   })
 })
 
+tap.test('Preloaded doc with funny name', function(t) {
+  var doc1 = {'_id':'this_doc', 'is':'nothing'}
+  var doc2 = {'_id':'this_doc/has:slashes!youknow?'}
+
+  if (POUCH)
+    state.db.bulkDocs([doc1, doc2], function(er, body) {
+      if (er)
+        throw er
+      if (!body || !body[0] || body[0].ok !== true)
+        throw new Error('Bad bulk docs store: ' + JSON.stringify(body))
+      if (!body || !body[1] || body[1].ok !== true)
+        throw new Error('Bad bulk docs store: ' + JSON.stringify(body))
+      stored()
+    })
+  else if (COUCH)
+    request({method:'POST', uri:COUCH+'/'+DB+'/_bulk_docs', json:{docs:[doc1,doc2]}}, function(er, res) {
+      if (er)
+        throw er
+      if (!res.body || !res.body[0] || res.body[0].ok !== true)
+        throw new Error('Bad bulk docs store: ' + JSON.stringify(res.body))
+      if (!res.body || !res.body[1] || res.body[1].ok !== true)
+        throw new Error('Bad bulk docs store: ' + JSON.stringify(res.body))
+      stored()
+    })
+
+  function stored() {
+    if (POUCH)
+      state.db.get('this_doc/has:slashes!youknow?', function(er, doc) {
+        if (er) throw er
+        ready(doc)
+      })
+    else if (COUCH)
+      request({url:COUCH+'/'+DB+'/this_doc%2fhas:slashes!youknow%3f', json:true}, function(er, res) {
+        if(er) throw er;
+        ready(res.body)
+      })
+  }
+
+  function ready(doc) {
+    var ops = 0;
+    function updater(doc, to_txn) {
+      ops += 1;
+      doc.type = 'preloaded slashy';
+      return to_txn();
+    }
+
+    txn({doc:doc}, updater, function(er, this_doc, txr) {
+      if(er) throw er;
+
+      t.equal('preloaded slashy', this_doc.type, 'Create doc for preload');
+      t.equal(ops, 1, 'One op for preloaded doc with funny name')
+      t.equal(txr.tries, 1, 'One try for doc update')
+      t.equal(txr.fetches, 0, 'No fetches for preloaded doc with funny name')
+
+      t.end()
+    })
+  }
+})
+
 
 //
 // Some helper operations
