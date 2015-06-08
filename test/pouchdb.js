@@ -221,7 +221,7 @@ tap.test('Update with defaults', function(t) {
   } else if (POUCH) {
     PouchDB.plugin(Txn.defaults({test_callback:checker}).PouchDB)
 
-    // XXX Pouch seems to re-use a database if the name is the same. If that ever changes, def_db will be missing doc_a.
+    // NOTE: Pouch seems to re-use a database if the name is the same. If that ever changes, def_db will be missing doc_a.
     var def_db = new PouchDB(DB, {db:memdown})
     var TXN = def_db.txn.bind(def_db)
   }
@@ -384,6 +384,80 @@ tap.test('Preloaded doc with funny name', function(t) {
       t.end()
     })
   }
+})
+
+tap.test('Preloaded doc with conflicts', function(t) {
+  var old_rev = state.doc_b._rev;
+  var old_type = state.doc_b.type;
+
+  var old_b = JSON.parse(JSON.stringify(state.doc_b));
+  var new_b = {_id:'doc_b', _rev:old_rev, 'type':'manual update'};
+
+  var url = COUCH + '/' + DB + '/doc_b';
+  if (COUCH)
+    request({method:'PUT', uri:url, json:new_b}, function(er, res) {
+      if (er) throw er
+      if (res.statusCode != 201)
+        throw new Error('Bad PUT ' + JSON.stringify(res.body))
+      ready(res.body.rev)
+    })
+  else if (POUCH)
+    state.db.put(new_b, function(er, result) {
+      if (er) throw er
+      ready(result.rev)
+    })
+
+  function ready(new_rev) {
+    // Lots of stuff going on, so make a plan.
+    var updater_tests = 3
+    var post_tests = 4
+    t.plan(updater_tests*2 + post_tests)
+
+    // At this point, the new revision is committed but tell Txn to assume otherwise.
+    var new_type = 'manual update'
+
+    var ops = 0;
+    function updater(doc, to_txn) {
+      ops += 1;
+      t.equal(ops == 1 || ops == 2, true, "Should take 2 ops to commit a preload conflict: " + ops)
+
+      if(ops == 1) {
+        t.equal(old_rev , doc._rev, "First op should still have old revision")
+        t.equal(old_type, doc.type, "First op should still have old value")
+      } else {
+        t.equal(new_rev , doc._rev, "Second op should have new revision")
+        t.equal(new_type, doc.type, "Second op should have new type")
+      }
+
+      doc.type = 'preload txn';
+      return to_txn();
+    }
+
+    txn({id:'doc_b', doc:old_b}, updater, function(er, final_b, txr) {
+      if(er) throw er;
+
+      t.equal(ops, 2, 'Two ops for preloaded txn with conflicts')
+      t.equal(txr.tries, 2, 'Two tries for preloaded doc with conflicts')
+      t.equal(txr.fetches, 1, 'One fetch for preloaded doc with conflicts')
+      t.equal(final_b.type, 'preload txn', 'Preloaded operation runs normally')
+
+      state.doc_b = final_b
+      t.end()
+    })
+  }
+})
+
+tap.test('Preloaded doc creation', function(t) {
+  var doc = {_id: "preload_create", worked: false};
+
+  txn({doc:doc, create:true}, setter('worked', true), function(er, doc, txr) {
+    if(er) throw er;
+
+    t.equal(txr.tries, 1, "One try to create a doc with preload")
+    t.equal(txr.fetches, 0, "No fetches to create a doc with preload")
+    t.equal(true, doc.worked, "Operation runs normally for preload create")
+    t.end()
+  })
 })
 
 
