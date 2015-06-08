@@ -28,7 +28,8 @@ var EventEmitter = events.EventEmitter2 || events.EventEmitter
 var TICK = typeof global.setImmediate !== 'function' ? process.nextTick : setImmediate
 
 require('defaultable').def(module,
-  { 'log'                : debug('txn')
+  { 'log'                : debug('txn:couchdb')
+  , 'pouchdb_log'        : debug('txn:pouchdb')
   , 'timestamps'         : false
   , 'timestamp_generator': function() { return new Date(); }
   , 'create'             : false
