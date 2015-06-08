@@ -42,6 +42,7 @@ require('defaultable').def(module,
   , 'couch'              : null
   , 'db'                 : null
   , 'id'                 : null
+  , 'test_callback'      : null
   }, function(module, exports, DEFAULT, require) {
 
 
@@ -324,6 +325,9 @@ Transaction.prototype.run = function() {
           return self.emit('error', er);
 
         // Success.
+        if (DEFAULT.test_callback)
+          DEFAULT.test_callback() // The only purpose for this is for the test suite to confirm that DEFAULT is working.
+
         doc._rev = result.rev;
         return self.emit('done', doc);
       })

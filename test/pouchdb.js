@@ -211,6 +211,37 @@ tap.test('Update with parameters', function(t) {
   })
 })
 
+tap.test('Update with defaults', function(t) {
+  // Set TXN to use for these tests, to test defaultable for CouchDB and PouchDB. All subsequent tests will assume txn()
+  // has these defaults. Since PouchDB needs only the id option, it is harder to confirm its defaultable behavior. So
+  // use the test_callback feature.
+  if (COUCH) {
+    txn = txn.defaults({couch:COUCH, db:DB})
+    var TXN = txn
+  } else if (POUCH) {
+    PouchDB.plugin(Txn.defaults({test_callback:checker}).PouchDB)
+
+    // XXX Pouch seems to re-use a database if the name is the same. If that ever changes, def_db will be missing doc_a.
+    var def_db = new PouchDB(DB, {db:memdown})
+    var TXN = def_db.txn.bind(def_db)
+  }
+
+  var op_ran = false
+  function checker() { op_ran = true }
+
+  TXN({id:'doc_a'}, plus(11), function(er, doc) {
+    if(er) throw er;
+
+    t.equal(36, doc.val, "Defaulted parameters: couch and db")
+
+    if (POUCH)
+      t.equal(op_ran, true, 'Defaultable PouchDB plugin ran test_callback')
+
+    state.doc_a = doc;
+    t.end()
+  })
+})
+
 //
 // Some helper operations
 //
