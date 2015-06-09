@@ -286,7 +286,7 @@ Transaction.prototype.run = function() {
         return self.emit('error', er);
 
       if(new_doc) {
-        self.log('Use new doc: ' + lib.JS(new_doc));
+        self.log('Use new doc: %j', new_doc)
         self.emit('replace', doc, new_doc);
         doc = new_doc;
       }
