@@ -113,9 +113,7 @@ function add_done(er, doc, txr) {
   if (er) {
     console.log('PouchDB error while tabulating points: ' + er);
   } else {
-    // txr is the "transaction result". Usually you can ignore it, but it can
-    // be interesting. For example, if Txn retries due to a document conflict,
-    // you can see that in txr.
+    // txr is the "transaction result" which you can usually ignore.
     console.log('It took '+txr.tries+' tries to give you '+doc.points+' points');
   }
 }
@@ -264,6 +262,43 @@ function after_txn(error, doc, txr) {
   // Application code continues.
 }
 ```
+
+### Transaction Result: txr
+
+Your callback receives a third argument, `txr`, the transaction result. Usually, you simply check the error argument to see if the transaction succeeded or failed. But the `txr` object contains the details about the execution. Properties:
+
+* **tries**: Integer, the number of times the full transaction cycle ran (fetch, modify, store)
+* **fetches**: Integer, the number of times Txn fetched the document from the database; usually the same as *tries* unless you provide a `doc` parameter, telling Txn to skip the first fetch
+* **stores**: Integer, the number of times Txn attempted to store the document in the database; usually the same as *tries* unless Txn encountered an error
+* **is_create**: Boolean, `true` if the document was created for the first time; `false` if the document was updated from a prior revision
+
+For example, if you already know of a document in the database and you try to update it
+
+``` javascript
+// My application already knows this, perhaps from a _changes feed.
+var doc = {_id:"my_doc", _rev:"3-0f3e848a3249737d5814bdd60228ae77", count:3};
+
+txn({doc:doc}, increment, on_done);
+
+function increment(doc, to_txn) {
+  doc.count = doc.count + 1;
+  return to_txn();
+}
+
+function on_done(er, doc, txr) {
+  console.log('Tries:' + txr.tries + ' Fetches:' + txr.fetches);
+}
+```
+
+The above example tells Txn to be optimistic, and to assume that we already know the document "my_doc". If the update runs with no conflicts, the output will be:
+
+    Fetches:0 Tries:1
+
+And thus we saved a full GET round-trip! However, if the document was out of date, *the code still works as-is*:
+
+    Fetches:1 Tries:2
+
+Txn tried the update, encountered a conflict, then fetched the latest document revision to process.
 
 ## Example: account signup
 
