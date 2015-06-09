@@ -282,6 +282,36 @@ tap.test('Create a document', function(t) {
   })
 })
 
+tap.test('Noop create', function(t) {
+  t.plan(4)
+
+  txn({id:'noop-create', create:true}, nothing, stored)
+  function nothing(doc, to_txn) {
+    to_txn()
+  }
+
+  function stored(er, doc, txr) {
+    if (er) throw er
+    t.equal(txr.stores, 1, 'Txn stored an empty creation document')
+
+    if (POUCH)
+      state.db.get('noop-create', function(er, doc) {
+        check(doc || {})
+      })
+    else if (COUCH)
+      request({url:COUCH+'/'+DB+'/noop-create', json:true}, function(er, res) {
+        check(res.body || {})
+      })
+  }
+
+  function check(doc) {
+    t.equal(doc._id, 'noop-create', 'Created doc is definitely in the DB')
+    t.type(doc._rev, 'string', 'Created doc has a revision')
+    t.equal(Object.keys(doc).length, 2, 'Doc only has _id and _rev keys')
+    t.end()
+  }
+})
+
 tap.test('Timestamps', function(t) {
   txn({id:'doc_a'}, plus(-6), function(er, doc) {
     if(er) throw er;

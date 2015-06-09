@@ -293,7 +293,7 @@ Transaction.prototype.run = function() {
         doc = new_doc;
       }
 
-      if(obj_diff.atmost(original.doc, doc, {})) {
+      if(!self.is_create && obj_diff.atmost(original.doc, doc, {})) {
         self.log('Skip txn update for unchanged doc: ' + original.id);
         return self.emit('done', doc);
       }
