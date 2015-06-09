@@ -265,11 +265,19 @@ tap.test('Create a document', function(t) {
     else if (POUCH)
       t.match(er && er.name, /not_found/, 'Error on unknown doc ID')
 
-    txn({id:'create_me', create:true}, setter('foo', 'yep'), function(er, doc) {
+    txn({id:'create_me', create:true}, setter('foo', 'yep'), function(er, doc, txr) {
+      if (er) throw er
+
       t.equal(er, null, 'No problem creating a doc with create:true')
       t.equal(doc.foo, 'yep', 'Created doc data looks good')
       t.equal(Object.keys(doc).length, 3, "No unexpected fields in doc create")
-      t.end()
+      t.equal(txr.is_create, true, 'Transaction result indicates document created')
+
+      txn({id:'doc_a'}, setter('creation','test'), function(er, doc, txr) {
+        if (er) throw er
+        t.equal(txr.is_create, false, 'Transaction result indicates creation not necessary')
+        t.end()
+      })
     })
   })
 })

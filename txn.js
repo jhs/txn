@@ -237,9 +237,11 @@ Transaction.prototype.run = function() {
       return self.emit('error', er);
 
     if(is_create) {
+      self.is_create = true
       couch_doc = { "_id": decodeURIComponent(self.id || self.uri_to_id(self.uri)) };
-      self.log('Create new doc: ' + lib.JS(couch_doc));
-    }
+      self.log('Create new doc: %j', couch_doc)
+    } else
+      self.is_create = false
 
     return run_op(couch_doc, is_create);
   })
