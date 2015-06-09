@@ -313,6 +313,40 @@ tap.test('Timestamps', function(t) {
   })
 })
 
+tap.test('Timestamps and optimizations', function(t) {
+  var runs = 0
+  var created_at = null
+  var updated_at = null
+
+  setTimeout(go, 5)
+  setTimeout(go, 250)
+
+  function go() {
+    txn({id:'test_ts', create:true, timestamps:true}, noop, done)
+  }
+
+  function noop(doc, to_ts) {
+    doc.x = true
+    return to_ts()
+  }
+
+  function done(er, doc, txr) {
+    if (er) throw er
+
+    runs += 1
+    if (runs == 1) {
+      t.equal(txr.stores, 1, 'Created document test_ts with timestamps')
+      created_at = doc.created_at
+      updated_at = doc.updated_at
+    } else {
+      t.equal(doc.created_at, created_at, 'No create change despite an update with timestamps')
+      t.equal(doc.updated_at, updated_at, 'No update change despite an update with timestamps')
+      t.equal(txr.stores, 0, 'No store for second update')
+      t.end()
+    }
+  }
+})
+
 tap.test('Preloaded doc with no conflicts', function(t) {
   txn({id:'doc_b', create:true}, setter('type','first'), function(er, doc_b, txr) {
     if(er) throw er;
