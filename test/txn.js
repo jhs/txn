@@ -377,6 +377,22 @@ tap.test('Timestamps and optimizations', function(t) {
   }
 })
 
+tap.test('Timestamps with conflicting fields', function(t) {
+  var birthday = '2015-06-04T01:23:28.943Z'
+  txn({id:'Isla', create:true, timestamps:true}, make_old_ts, done)
+  function make_old_ts(doc, to_txn) {
+    doc.created_at = birthday
+    return to_txn()
+  }
+  function done(er, doc) {
+    if (er) throw er
+    t.equal(doc.created_at, birthday, 'Txn does not overwrite an existing .created_at field')
+    t.type(doc.updated_at, 'string', 'Txn did create updated_at normally')
+    t.notEqual(doc.updated_at, doc.created_at, 'Timestamps are different since created_at was already there')
+    t.end()
+  }
+})
+
 tap.test('Preloaded doc with no conflicts', function(t) {
   txn({id:'doc_b', create:true}, setter('type','first'), function(er, doc_b, txr) {
     if(er) throw er;

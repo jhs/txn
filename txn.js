@@ -309,7 +309,7 @@ Transaction.prototype.run = function() {
       if(!! self.timestamps) {
         doc.updated_at = JSON.stringify(self.timestamp_generator()).replace(/"/g, '');
         if(is_create)
-          doc.created_at = doc.updated_at;
+          doc.created_at = doc.created_at || doc.updated_at;
       }
 
       self.log('Update transaction (%s): %s', self.name, self.uri || self.id)
