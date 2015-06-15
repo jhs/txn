@@ -378,7 +378,7 @@ tap.test('Timestamps and optimizations', function(t) {
 })
 
 tap.test('Timestamps with conflicting fields', function(t) {
-  var birthday = '2015-06-04T01:23:28.943Z'
+  var birthday = '2015-06-04T01:38:28.943Z'
   txn({id:'Isla', create:true, timestamps:true}, make_old_ts, done)
   function make_old_ts(doc, to_txn) {
     doc.created_at = birthday
