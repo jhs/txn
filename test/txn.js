@@ -214,6 +214,29 @@ tap.test('Update with parameters', function(t) {
   })
 })
 
+tap.test('Encoding', function(t) {
+  var id = 'Doc Made At 2016-03-04T17:16:59.214Z'
+  if (COUCH)
+    var opts = {couch:COUCH, db:DB, id:id, create:true}
+  else if (POUCH)
+    var opts = {id:id, create:true}
+
+  txn(opts, change_odd_id, changed)
+
+  function change_odd_id(doc, to_txn) {
+    doc.id_seen = doc._id
+    return to_txn()
+  }
+
+  function changed(er, doc) {
+    if (er) throw er
+
+    t.equal(doc._id    , id, 'Document _id is correct and not encoded')
+    t.equal(doc.id_seen, id, 'ID copied over in the transaction is correct and not encoded')
+    t.end()
+  }
+})
+
 tap.test('Update with defaults', function(t) {
   // Set TXN to use for these tests, to test defaultable for CouchDB and PouchDB. All subsequent tests will assume txn()
   // has these defaults. Since PouchDB needs only the id option, it is harder to confirm its defaultable behavior. So

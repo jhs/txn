@@ -151,7 +151,12 @@ Transaction.prototype.start = function() {
     return self.emit('error', new Error('Required doc._id value'));
   if(self.doc)
     self.id = self.doc._id
-  if(self.id)
+
+  // TODO:
+  // ID Encoding stuff should not be in this library. Or, at least it should not be here. The ID should be encoded in the HTTP code.
+  if(self.id && self.pouchdb)
+    self.log('Skip ID encoding for PouchDB')
+  else if (self.id)
     self.id = lib.enc_id(self.id)
 
   self.prep_params()
