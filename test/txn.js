@@ -80,6 +80,7 @@ tap.test('Setup', function(t) {
       state.doc_a = doc
       state.doc_a._rev = body.rev
       txn = state.db.txn.bind(state.db)
+      txn.map = state.db.txn.map
       done()
     })
   }
@@ -574,6 +575,50 @@ tap.test('Preloaded doc creation', function(t) {
     t.equal(txr.fetches, 0, "No fetches to create a doc with preload")
     t.equal(true, doc.worked, "Operation runs normally for preload create")
     t.end()
+  })
+})
+
+tap.test('Map function', function(t) {
+  if (! POUCH) {
+    t.ok(true, 'TODO: CouchDB map support not yet implemented')
+    return t.end()
+  }
+
+  txn({doc:{_id:'exists'}, create:true}, setter('score', 5), function(er, old_doc, txr) {
+    if (er)
+      throw er
+
+    var req = [ {id:'create-me', create:true}
+              , {doc:old_doc}
+              , {id:old_doc._id} // Do old_doc twice.
+              ]
+    
+    state.db.txn_map(req, do_doc, done)
+
+    function do_doc(doc, to_txn) {
+      doc.score = 1 + (doc.score || 0)
+      return to_txn()
+    }
+
+    function done(er, docs, txrs) {
+      if (er)
+        throw er
+
+      t.equal(docs.length, 3, 'Did 3 docs')
+      t.equal(txrs.length, 3, 'Got 3 transaction results')
+
+      t.equal(txrs[0].is_create, true, 'First doc was created')
+      t.equal(docs[0].score, 1, 'First doc got a score of 1')
+      t.equal(txrs[0].tries, 1, 'One try to create the first doc')
+      t.equal(txrs[0].stores, 1, 'Successful create with one store op')
+      t.equal(txrs[0].fetches, 1, 'No fetches for a create')
+
+      t.equal(docs[1]._id, docs[2]._id, 'Second two ops were for the same doc')
+      t.ok(docs[1].score == 6 || docs[2].score == 6, 'One of the docs has a score of 6')
+      t.ok(docs[1].score == 7 || docs[2].score == 7, 'One of the docs has a score of 7')
+
+      t.end()
+    }
   })
 })
 

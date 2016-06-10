@@ -15,6 +15,7 @@
 //    limitations under the License.
 
 var util = require('util')
+var async = require('async')
   , debug = require('debug')
   , events = require('events')
   , assert = require('assert')
@@ -52,8 +53,31 @@ var lib = require('./lib');
 module.exports = couch_doc_txn
 module.exports.Txn = Transaction
 module.exports.Transaction = Transaction
-module.exports.PouchDB = {Transaction:Transaction, txn:pouch_doc_txn}
+module.exports.PouchDB = {Transaction:Transaction, txn:pouch_doc_txn, txn_map:pouch_map}
 
+
+function pouch_map(opts, operation, callback) {
+  var self = this
+  async.map(opts, run, done)
+
+  function run(opt, to_async) {
+    pouch_doc_txn.call(self, opt, operation, function(er, doc, txr) {
+      if (er)
+        return to_async(er)
+      return to_async(null, {doc:doc, txr:txr})
+    })
+  }
+
+  function done(er, results) {
+    if (er)
+      return callback(er)
+
+    var docs = results.map(result => result.doc)
+    var txrs = results.map(result => result.txr)
+
+    callback(null, docs, txrs)
+  }
+}
 
 function pouch_doc_txn(opts, operation, callback) {
   opts = opts || {}
