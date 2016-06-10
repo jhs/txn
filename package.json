@@ -25,6 +25,7 @@
     "test-couchdb": "env couchdb=${couchdb:-http://127.0.0.1:5984} node test/txn.js"
   },
   "dependencies": {
+    "async": "^2.0.0-rc.6",
     "browser-request": "~0.2.1",
     "debug": "^2.1.0",
     "defaultable": "~0.7.2",
