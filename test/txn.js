@@ -772,6 +772,10 @@ tap.test('Database errors', function(t) {
   }
 })
 
+// TODO: This test is now very, very slow with newer Node.js on a more modest MacBook. I think the only real point of the
+// test is to make sure that txn does not always run in the same tick. That is a more straightforward test, but not
+// yet implemented.
+if (0)
 tap.test('Avoid smashing the stack', function(t) {
   t.plan(2) // Check that the limit is found + check that it is exceeded.
 

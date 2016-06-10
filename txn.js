@@ -18,7 +18,7 @@ var util = require('util')
   , debug = require('debug')
   , events = require('events')
   , assert = require('assert')
-  , obj_diff = require('obj_diff')
+  , obj_diff = require('obj_diff').defaults({couchdb: true})
 
 var EventEmitter = events.EventEmitter2 || events.EventEmitter
 var TICK = typeof global.setImmediate !== 'function' ? process.nextTick : setImmediate
@@ -298,13 +298,14 @@ Transaction.prototype.run = function() {
         doc = new_doc;
       }
 
-      if(!self.is_create && obj_diff.atmost(original.doc, doc, {})) {
+      var diff = obj_diff(original.doc, doc)
+      self.log('Operation diff (%s): %j', self.name, diff)
+
+      if(!self.is_create && diff.atmost()) {
         self.log('Skip txn update for unchanged doc: ' + original.id);
         return self.emit('done', doc);
       }
 
-      var diff = obj_diff.diff(original.doc, doc);
-      self.log('Operation diff (%s): %j', self.name, diff)
       self.emit('change', diff);
 
       doc._id = original.id;
