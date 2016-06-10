@@ -655,7 +655,7 @@ tap.test('After delay', function(t) {
       duration = end - start;
 
       if(base_duration < 10)
-        t.equal(duration < 10, true, 'after=0 should run immediately')
+        t.equal(duration < 10, true, 'after=0 should run immediately; duration = ' + duration)
       else
         t.equal(almost(0.25, duration, base_duration), true, 'after=0 should run immediately (about ' + base_duration + ')')
 
